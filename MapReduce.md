@@ -9,13 +9,13 @@ Split的默认大小与Block相同，但也不会被此局限，你可以根据�
 ### Mapper
 MapTask将读取Split中的**一条条记录**，**每一条记录都会调用一次**Mapper方法(Reducer方法是**一组数据调用一次**)，记录就被转化成<K,V>**键值对**，之后会触发一个算法给每个<K,V>添加一个**分区号P**，P规定了该<K,V>归属于哪个Partiton(Partition和ReduceTask之间的一一对应的关系)，即计算出了该<K,V>在Reduce过程中归属于哪个ReduceTask；随后我们在内存中对<K,V>-P进行分类，首先按照分区号P进行外部排序，然后再按照Key值在分区内进行排序，这样数据就按照**外部按分区，内部按分组**的方式进行了分类；因为我们每次是抽取一部分数据在**内存中进行排序**，排序之后的小文件存放在硬盘上(一次IO)，所以最后还要在**硬盘**内将这些数据**归并(Merge)**和**整合(combine)**，整合(可以减少数据量，节省网络传输和I/O的开销)完毕之后，再按照分区号将数据发送给相应的ReduceTask(Shuffle)。  
 **为什么需要排序？**  
-我们知道Reducer对数据的操作是按组进行的(Key值相同的键值对为一组)
+我们知道Reducer对数据的操作是按组进行的(**Key值相同的键值对为一组数据**)
 - 如果Map完以后不对键值对进行排序，那么，ReduceTask收到的就是乱序的键值对的文件，就意味着，Reducer每次都需要遍历整个文件才能从中提取出一组数据，分组越多，Reducer遍历整个文件的次数就越多，花费的时间也就越长，效率就低下；
 - 如果我们在Map的时候就对键值对进行排序，Reducer收到的就是一个个按照分组排好序的文件，Reducer就可以使用归并(merge)将其整合成更完整的文件(Reducer的排序强依赖于Mapper排序输出的结果)，可以节省下大量的时间，且MapTask中Mapper的排序是并行进行的，也是高效的。
 ### Partition
-一个Reducer是可以处理一组或者多组数据(Key相同的称为一组数据)，但是一组数据只能被一个Reducer处理，所以Reducer与分组数据之间的关系是一对多(1->N)，这就决定了一个Partition中是可以存放一组或者多组数据(有多个Key值)，但一组数据也只能有一个的分区号；
+一个Reducer是可以处理一组或者多组数据，但是一组数据只能被一个Reducer处理，所以Reducer与分组数据之间的关系是一对多(1->N)，所以Partition中是可以存放一组或者多组数据(有多个Key值)，但一组数据只能有一个的分区号；
 ### Reducer
-ReduceTask收到了来自不同Mapper但处于同一Partition的分块，将它们进行归并(Merge)整合(combie)，一边归并一边计算，随后Reducer对Partition中的分组按照顺序进行处理，每一组调用一次Reducer方法，得到该分组的结果并输出。
+ReduceTask收到了来自不同Mapper但处于同一Partition的分块，将它们进行归并(Merge)整合(combie)，一边归并一边计算，得到该分组的结果并输出。
 ## MapReduce2.0 On Yarn 的运行架构
 在Hadoop2.x中MapReduce、Spark等计算框架是运行在资源调度框架Yarn之上的。
 - ResourceManager(Yarn)  
